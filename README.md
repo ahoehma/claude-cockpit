@@ -1,5 +1,8 @@
 # Claude Cockpit
 
+[![CI](https://github.com/ahoehma/claude-cockpit/actions/workflows/ci.yml/badge.svg)](https://github.com/ahoehma/claude-cockpit/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/claude-cockpit)](https://www.npmjs.com/package/claude-cockpit)
+
 A local real-time dashboard for monitoring all your [Claude Code](https://claude.ai/code) agent sessions — including sub-agents — from a single browser tab.
 
 Runs entirely on your machine. No cloud, no accounts, no tracking.
@@ -29,6 +32,21 @@ Runs entirely on your machine. No cloud, no accounts, no tracking.
 ---
 
 ## Getting Started
+
+**Run without installing:**
+
+```bash
+npx claude-cockpit
+```
+
+**Or install globally:**
+
+```bash
+npm install -g claude-cockpit
+claude-cockpit
+```
+
+**Or clone and develop:**
 
 ```bash
 git clone https://github.com/ahoehma/claude-cockpit.git
