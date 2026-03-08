@@ -1,5 +1,12 @@
 # Changelog
 
+# [0.8.0](https://github.com/ahoehma/claude-cockpit/compare/v0.7.1...v0.8.0) (2026-03-08)
+
+
+### Features
+
+* add cockpit view with 3D flip transition and group sort fix ([b9e504a](https://github.com/ahoehma/claude-cockpit/commit/b9e504a867585673bb87da2fec41f63933b2243c))
+
 ## [0.7.1](https://github.com/ahoehma/claude-cockpit/compare/v0.7.0...v0.7.1) (2026-03-08)
 
 
