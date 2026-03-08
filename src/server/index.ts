@@ -12,9 +12,11 @@ import { createConnection } from 'net'
 import chokidar from 'chokidar'
 import { scanAllSessions } from './scanner.ts'
 import type { CockpitState } from './models.ts'
+import { embeddedClient } from './embedded-client.ts'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
-const IS_DEV = process.env.NODE_ENV !== 'production'
+const HAS_EMBEDDED = Object.keys(embeddedClient).length > 0
+const IS_DEV = !HAS_EMBEDDED && process.env.NODE_ENV !== 'production'
 
 async function findFreePort(start: number): Promise<number> {
   return new Promise((resolve) => {
@@ -88,7 +90,17 @@ const server = createServer((req, res) => {
     return
   }
 
-  // In dev mode, Vite handles the frontend — only serve static in production
+  // Serve embedded assets (compiled exe mode)
+  if (HAS_EMBEDDED) {
+    const urlPath = (url === '/' ? '/index.html' : url.split('?')[0]) as string
+    const asset = embeddedClient[urlPath] ?? embeddedClient['/index.html']
+    if (!asset) { res.writeHead(404).end('Not found'); return }
+    res.writeHead(200, { 'Content-Type': asset.mime })
+    res.end(Buffer.from(asset.content, 'base64'))
+    return
+  }
+
+  // Serve from dist/client on disk (production / npm start)
   if (!IS_DEV) {
     const clientDir = join(__dirname, '..', 'client')
     let filePath = join(clientDir, url === '/' ? 'index.html' : url)

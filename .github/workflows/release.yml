@@ -6,10 +6,26 @@ on:
       - 'v*.*.*'
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
     permissions:
-      contents: write
+      contents: read
+
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x64
+            outfile: dist/claude-cockpit-linux-x64
+
+          - os: windows-latest
+            name: windows-x64
+            outfile: dist/claude-cockpit-windows-x64.exe
+
+          - os: macos-latest
+            name: macos-arm64
+            outfile: dist/claude-cockpit-macos-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -19,11 +35,43 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - uses: oven-sh/setup-bun@v2
+
       - run: npm ci
 
-      - run: npm run build
+      - run: OUTFILE=${{ matrix.outfile }} bun run scripts/build-exe.ts
+        if: runner.os != 'Windows'
+
+      - run: |
+          $env:OUTFILE = "${{ matrix.outfile }}"
+          bun run scripts/build-exe.ts
+        shell: pwsh
+        if: runner.os == 'Windows'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.outfile }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          files: |
+            dist/linux-x64/claude-cockpit-linux-x64
+            dist/windows-x64/claude-cockpit-windows-x64.exe
+            dist/macos-arm64/claude-cockpit-macos-arm64

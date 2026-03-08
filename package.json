@@ -31,6 +31,7 @@
     "dev:server": "tsx watch src/server/index.ts",
     "dev:client": "vite",
     "build": "vite build",
+    "build:exe": "bun run scripts/build-exe.ts",
     "start": "NODE_ENV=production tsx src/server/index.ts"
   },
   "devDependencies": {
