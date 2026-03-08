@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useNow } from '../useNow.ts'
-import { GitBranch, Clock, Zap, Eye, RefreshCw, ChevronRight, ChevronDown, Terminal, FileEdit, Search, Globe, Bot, MessageSquare, Loader2 } from 'lucide-vue-next'
+import { GitBranch, Clock, Timer, Zap, Eye, RefreshCw, ChevronRight, ChevronDown, Terminal, FileEdit, Search, Globe, Bot, MessageSquare, Loader2 } from 'lucide-vue-next'
 import type { Session, SubAgent } from '../../../../server/models.ts'
 
 const now = useNow()
@@ -14,6 +14,7 @@ const props = defineProps<{
 // ── Expand state ──────────────────────────────────────────────────────────────
 const promptExpanded  = ref(false)
 const actionExpanded  = ref(false)
+const tasksExpanded   = ref(false)
 
 // ── Status ────────────────────────────────────────────────────────────────────
 const statusConfig = computed(() => {
@@ -71,8 +72,9 @@ function relativeTime(ts: string): string {
   return `${h}h ${m % 60}m ago`
 }
 
-function duration(start: string): string {
-  const diff = now.value - new Date(start).getTime()
+function duration(start: string, end?: string): string {
+  const endMs = end ? new Date(end).getTime() : now.value
+  const diff = endMs - new Date(start).getTime()
   const s = Math.floor(diff / 1000)
   if (s < 60) return `${s}s`
   const m = Math.floor(s / 60)
@@ -105,6 +107,11 @@ const hasSubAgentCost = computed(() => {
   const s = props.agent as Session
   return s.subAgents.length > 0 && s.subAgents.some(a => a.tokenUsage.estimatedCostUsd > 0)
 })
+
+// ── Task progress ─────────────────────────────────────────────────────────────
+const taskDone     = computed(() => (props.agent.tasks ?? []).filter(t => t.status === 'completed').length)
+const taskProgress = computed(() => props.agent.tasks?.length ? (taskDone.value / props.agent.tasks.length) * 100 : 0)
+const taskActive   = computed(() => (props.agent.tasks ?? []).find(t => t.status === 'in_progress'))
 
 // ── Current action ────────────────────────────────────────────────────────────
 const currentAction = computed(() => {
@@ -153,6 +160,7 @@ const attentionBlock = computed(() => {
   }
 
   if (a.status !== 'waiting') return null
+  if (!a.needsUserReaction) return null  // session finished long ago, no longer needs response
 
   // Claude finished its turn (end_turn) — show last message
   if (a.lastAssistantText) {
@@ -179,7 +187,7 @@ function trimMessage(text: string, maxLen = 240): string {
     class="rounded-xl border transition-all duration-200"
     :style="isSubAgent
       ? `background: var(--surface-sub); border-color: var(--border-subtle)`
-      : (agent.needsUserReaction || agent.status === 'waiting')
+      : agent.needsUserReaction
         ? 'background: var(--surface); border-color: #d97706; box-shadow: 0 0 0 1px #d9770640, 0 4px 12px #d9770618'
         : agent.status === 'active'
           ? 'background: var(--surface); border-color: #10b981; box-shadow: 0 0 0 1px #10b98120'
@@ -242,6 +250,59 @@ function trimMessage(text: string, maxLen = 240): string {
       </div>
     </div>
 
+    <!-- ── Task progress ── -->
+    <div v-if="agent.tasks?.length" class="mx-4 mb-2 rounded-lg border overflow-hidden" style="border-color: var(--border-inset)">
+      <!-- progress bar header row — click to expand -->
+      <button
+        class="w-full flex items-center gap-2 px-3 py-1.5 text-left"
+        style="background: var(--surface-inset)"
+        @click="tasksExpanded = !tasksExpanded"
+      >
+        <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background: var(--border)">
+          <div
+            class="h-full rounded-full transition-all duration-500"
+            style="background: #6366f1"
+            :style="{ width: taskProgress + '%' }"
+          />
+        </div>
+        <span class="text-xs font-mono flex-shrink-0" style="color: var(--text-subtle)">
+          {{ taskDone }} / {{ agent.tasks.length }}
+        </span>
+        <ChevronDown
+          :size="11"
+          class="flex-shrink-0 transition-transform"
+          :class="tasksExpanded ? 'rotate-180' : ''"
+          style="color: var(--text-subtle)"
+        />
+      </button>
+      <!-- current in_progress label (collapsed only) -->
+      <p v-if="!tasksExpanded && taskActive" class="px-3 pb-1.5 text-xs truncate" style="color: var(--text-muted)">
+        ↳ {{ taskActive.activeForm || taskActive.subject }}
+      </p>
+      <!-- expanded task list -->
+      <div v-if="tasksExpanded" class="border-t px-3 py-2 space-y-1" style="border-color: var(--border-inset)">
+        <div
+          v-for="task in agent.tasks"
+          :key="task.id"
+          class="flex items-start gap-2"
+        >
+          <span class="flex-shrink-0 mt-0.5 text-xs w-3 text-center">
+            <span v-if="task.status === 'completed'" class="text-emerald-500">✓</span>
+            <span v-else-if="task.status === 'in_progress'" class="text-indigo-400">›</span>
+            <span v-else style="color: var(--text-subtle)">○</span>
+          </span>
+          <span
+            class="text-xs leading-relaxed"
+            :style="task.status === 'completed'
+              ? 'color: var(--text-subtle); text-decoration: line-through'
+              : task.status === 'in_progress'
+                ? 'color: var(--text)'
+                : 'color: var(--text-muted)'"
+          >{{ task.subject }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Attention block (waiting for user) ── -->
     <div
       v-if="attentionBlock"
@@ -298,12 +359,20 @@ function trimMessage(text: string, maxLen = 240): string {
       class="flex items-center gap-4 px-4 pb-3 pt-1 border-t mt-1"
       style="border-color: var(--border-subtle)"
     >
-      <span class="flex items-center gap-1 text-xs" style="color: var(--text-subtle)">
-        <Clock :size="11" />
-        {{ duration(agent.startTime) }}
+      <span class="flex items-center gap-1 text-xs" style="color: var(--text-subtle)" title="Session duration">
+        <Timer :size="11" />
+        {{ duration(agent.startTime, agent.status === 'active' ? undefined : agent.lastActivity) }}
       </span>
-      <span class="text-xs" style="color: var(--text-subtle)">{{ relativeTime(agent.lastActivity) }}</span>
-      <span class="text-xs ml-auto" style="color: var(--text-subtle)">{{ agent.toolCallCount }} calls</span>
+      <span class="flex items-center gap-1 text-xs" style="color: var(--text-subtle)" title="Last activity">
+        <Clock :size="11" />
+        {{ relativeTime(agent.lastActivity) }}
+      </span>
+      <span
+        class="text-xs font-mono ml-auto"
+        style="color: var(--text-subtle)"
+        :title="isSubAgent ? (agent as any).agentId : (agent as any).sessionId"
+      >{{ (isSubAgent ? (agent as any).agentId : (agent as any).sessionId).slice(0, 8) }}</span>
+      <span class="text-xs" style="color: var(--text-subtle)">{{ agent.toolCallCount }} calls</span>
       <span
         v-if="!isSubAgent && (agent as any).subAgents?.length > 0"
         class="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded"

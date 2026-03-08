@@ -170,24 +170,25 @@ const grandTotalCost = computed(() =>
   allSessions.value.reduce((acc, s) => acc + sessionTotalCost(s), 0)
 )
 
-// ── Sub-agent expand state ────────────────────────────────────────────────────
-const expandedSubAgents = ref(new Set<string>())
+// ── Sub-agent expand state (0 = collapsed, 1 = compact, 2 = full) ─────────────
+const subAgentLevel = ref(new Map<string, 0 | 1 | 2>())
 
-// Auto-expand sub-agent sections when switching to 'all' filter
+// Auto-expand to compact level when switching to 'all' filter
 watch(filter, (f) => {
   if (f === 'all') {
-    const ids = allSessions.value.filter(s => s.subAgents.length > 0).map(s => s.sessionId)
-    expandedSubAgents.value = new Set(ids)
+    const m = new Map(subAgentLevel.value)
+    for (const s of allSessions.value) {
+      if (s.subAgents.length > 0 && !m.has(s.sessionId)) m.set(s.sessionId, 1)
+    }
+    subAgentLevel.value = m
   }
 })
 
-function toggleSubAgents(sessionId: string) {
-  if (expandedSubAgents.value.has(sessionId)) {
-    expandedSubAgents.value.delete(sessionId)
-  } else {
-    expandedSubAgents.value.add(sessionId)
-  }
-  expandedSubAgents.value = new Set(expandedSubAgents.value) // trigger reactivity
+function cycleSubAgents(sessionId: string) {
+  const m = new Map(subAgentLevel.value)
+  const cur = m.get(sessionId) ?? 0
+  m.set(sessionId, cur === 0 ? 1 : cur === 1 ? 2 : 0)
+  subAgentLevel.value = m
 }
 
 function subAgentSummary(session: Session): string {
@@ -434,10 +435,10 @@ function formatCost(usd: number): string {
           <SubAgentSection
             v-if="session.subAgents.length > 0"
             :session="session"
-            :expanded="expandedSubAgents.has(session.sessionId)"
+            :expand-level="subAgentLevel.get(session.sessionId) ?? 0"
             :sorted-sub-agents="sortedSubAgents(session)"
             :summary="subAgentSummary(session)"
-            @toggle="toggleSubAgents(session.sessionId)"
+            @cycle="cycleSubAgents(session.sessionId)"
           />
         </template>
       </div>

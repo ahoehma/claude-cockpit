@@ -1,5 +1,5 @@
 import { readFileSync } from 'fs'
-import type { Session, SubAgent, TokenUsage, ToolCall, SessionStatus } from './models.ts'
+import type { Session, SubAgent, TokenUsage, ToolCall, SessionStatus, AgentTask } from './models.ts'
 
 const COST_PER_M_INPUT = 3.0    // USD per million input tokens (Sonnet)
 const COST_PER_M_OUTPUT = 15.0  // USD per million output tokens
@@ -49,6 +49,7 @@ export function parseJsonl(filePath: string): {
   currentTask?: string
   tokenUsage: TokenUsage
   toolCallCount: number
+  tasks: AgentTask[]
 } {
   let lines: string[]
   try {
@@ -68,6 +69,9 @@ export function parseJsonl(filePath: string): {
   let toolCallCount = 0
   let lastTool: ToolCall | undefined
   let lastAssistantText: string | undefined
+  // Task tracking: tool_use.id → task (pending result), numeric id → task (confirmed)
+  const pendingTasks = new Map<string, Omit<AgentTask, 'id'>>()  // tool_use.id → partial
+  const tasks        = new Map<string, AgentTask>()              // numeric id → task
   // For status detection
   let lastRole: 'user' | 'assistant' | undefined
   let lastStopReason: string | null = null
@@ -120,6 +124,23 @@ export function parseJsonl(filePath: string): {
       lastMsgHasToolResult = Array.isArray(content) &&
         (content as Record<string, unknown>[]).some(b => b.type === 'tool_result')
       lastMsgHasToolUse = false
+
+      // Resolve pending TaskCreate calls: "Task #3 created successfully: ..."
+      if (Array.isArray(content)) {
+        for (const block of content as Record<string, unknown>[]) {
+          if (block.type !== 'tool_result') continue
+          const toolUseId = block.tool_use_id as string | undefined
+          if (!toolUseId || !pendingTasks.has(toolUseId)) continue
+          const partial = pendingTasks.get(toolUseId)!
+          pendingTasks.delete(toolUseId)
+          const resultText = Array.isArray(block.content)
+            ? (block.content as Record<string, unknown>[]).map(b => b.text ?? '').join('')
+            : String(block.content ?? '')
+          const match = resultText.match(/Task\s+#?(\d+)/i)
+          const numericId = match ? match[1] : String(tasks.size + 1)
+          tasks.set(numericId, { ...partial, id: numericId })
+        }
+      }
     }
 
     // Assistant messages: extract tool calls + usage
@@ -136,10 +157,20 @@ export function parseJsonl(filePath: string): {
           if (block.type === 'tool_use') {
             toolCallCount++
             lastMsgHasToolUse = true
-            lastTool = {
-              name: block.name as string,
-              input: (block.input ?? {}) as Record<string, unknown>,
-              timestamp: ts ?? new Date().toISOString(),
+            const toolName = block.name as string
+            const toolInput = (block.input ?? {}) as Record<string, unknown>
+            lastTool = { name: toolName, input: toolInput, timestamp: ts ?? new Date().toISOString() }
+
+            if (toolName === 'TaskCreate') {
+              pendingTasks.set(block.id as string, {
+                subject:    String(toolInput.subject    ?? ''),
+                activeForm: String(toolInput.activeForm ?? toolInput.subject ?? ''),
+                status:     'pending',
+              })
+            } else if (toolName === 'TaskUpdate') {
+              const taskId = String(toolInput.taskId ?? '')
+              const task   = tasks.get(taskId)
+              if (task) task.status = (toolInput.status as AgentTask['status']) ?? task.status
             }
           }
           if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
@@ -227,6 +258,7 @@ export function parseJsonl(filePath: string): {
     lastAssistantText,
     tokenUsage,
     toolCallCount,
+    tasks: Array.from(tasks.values()),
   }
 }
 
@@ -265,5 +297,6 @@ export function parseSubAgent(filePath: string, agentId: string, metaPath: strin
     lastAssistantText: parsed.lastAssistantText,
     tokenUsage: parsed.tokenUsage,
     toolCallCount: parsed.toolCallCount,
+    tasks: parsed.tasks,
   }
 }

@@ -108,7 +108,12 @@ export function scanAllSessions(): CockpitState {
           if (!existsSync(agentJsonl)) continue
 
           const subAgent = parseSubAgent(agentJsonl, agentId, agentMeta)
-          if (subAgent) subAgents.push(subAgent)
+          if (subAgent) {
+            // Sub-agents can't receive direct user input — 'waiting' means they finished
+            subAgent.needsUserReaction = false
+            if (subAgent.status === 'waiting') subAgent.status = 'completed'
+            subAgents.push(subAgent)
+          }
         }
       }
 
@@ -132,6 +137,7 @@ export function scanAllSessions(): CockpitState {
         lastAssistantText: parsed.lastAssistantText,
         tokenUsage: parsed.tokenUsage,
         toolCallCount: parsed.toolCallCount,
+        tasks: parsed.tasks,
         subAgents,
       }
 

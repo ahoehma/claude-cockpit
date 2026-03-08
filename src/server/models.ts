@@ -16,6 +16,15 @@ export interface ToolCall {
   result?: string
 }
 
+export type TaskStatus = 'pending' | 'in_progress' | 'completed'
+
+export interface AgentTask {
+  id: string          // numeric string returned by TaskCreate result ("1", "2", ...)
+  subject: string
+  activeForm?: string // short label shown while in_progress
+  status: TaskStatus
+}
+
 export interface SubAgent {
   agentId: string
   slug: string
@@ -24,13 +33,14 @@ export interface SubAgent {
   startTime: string
   lastActivity: string
   status: SessionStatus
-  needsUserReaction: boolean  // Claude finished its turn — user must respond
+  needsUserReaction: boolean
   currentTool?: ToolCall
   lastTool?: ToolCall
   currentTask?: string
   lastAssistantText?: string
   tokenUsage: TokenUsage
   toolCallCount: number
+  tasks: AgentTask[]
 }
 
 export interface Session {
@@ -51,6 +61,7 @@ export interface Session {
   lastAssistantText?: string
   tokenUsage: TokenUsage
   toolCallCount: number
+  tasks: AgentTask[]
   subAgents: SubAgent[]
 }
 
