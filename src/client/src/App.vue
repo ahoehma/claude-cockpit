@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useNow } from './useNow.ts'
-import { Wifi, WifiOff, RefreshCw, Activity, Bot, Sun, Moon, Layers, ChevronDown } from 'lucide-vue-next'
+import { Wifi, WifiOff, RefreshCw, Bot, Sun, Moon, Layers, ChevronDown } from 'lucide-vue-next'
 import { useWebSocket } from './useWebSocket.ts'
 import { useTheme } from './useTheme.ts'
 import AgentCard from './components/AgentCard.vue'
@@ -233,9 +233,31 @@ function formatCost(usd: number): string {
 
         <!-- Logo + title -->
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
-            <Activity :size="16" class="text-white" />
-          </div>
+          <svg viewBox="0 0 100 100" class="w-8 h-8 flex-shrink-0" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100" height="100" rx="16" fill="#0f172a"/>
+            <!-- Bot body -->
+            <rect x="22" y="8"  width="56" height="10" fill="#ea580c"/>
+            <rect x="10" y="18" width="80" height="10" fill="#f97316"/>
+            <rect x="6"  y="28" width="88" height="10" fill="#f97316"/>
+            <rect x="6"  y="38" width="88" height="10" fill="#f97316"/>
+            <rect x="6"  y="48" width="88" height="10" fill="#f97316"/>
+            <rect x="10" y="58" width="80" height="10" fill="#ea580c"/>
+            <rect x="22" y="68" width="56" height="8"  fill="#c2410c"/>
+            <rect x="18" y="76" width="22" height="9"  fill="#c2410c"/>
+            <rect x="60" y="76" width="22" height="9"  fill="#c2410c"/>
+            <!-- Eye visor -->
+            <rect x="6"  y="30" width="88" height="26" fill="#0f172a"/>
+            <!-- Iris -->
+            <rect x="30" y="31" width="40" height="24" rx="2" fill="#f97316"/>
+            <!-- Pupil -->
+            <rect x="40" y="35" width="20" height="16" rx="1" fill="#0f172a"/>
+            <rect x="45" y="39" width="10" height="8"  fill="#0f172a"/>
+            <!-- Highlight -->
+            <rect x="32" y="33" width="10" height="6"  fill="white" opacity="0.28"/>
+            <!-- Cockpit ticks -->
+            <rect x="2"  y="40" width="6" height="4" fill="#f97316" opacity="0.6"/>
+            <rect x="92" y="40" width="6" height="4" fill="#f97316" opacity="0.6"/>
+          </svg>
           <div>
             <h1 class="text-sm font-bold leading-none">Claude Cockpit</h1>
             <p class="text-xs mt-0.5" style="color: var(--text-muted)">agent monitor</p>

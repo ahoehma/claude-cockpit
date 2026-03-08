@@ -13,6 +13,7 @@ import chokidar from 'chokidar'
 import { scanAllSessions } from './scanner.ts'
 import type { CockpitState } from './models.ts'
 import { embeddedClient } from './embedded-client.ts'
+import { setupTray } from './tray.ts'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 const HAS_EMBEDDED = Object.keys(embeddedClient).length > 0
@@ -188,11 +189,22 @@ server.listen(PORT, () => {
   console.log(`\n  Claude Cockpit API: http://localhost:${PORT}`)
   console.log(`  Open in browser:    ${url}\n`)
 
-  // Open browser
-  const cmd = process.platform === 'win32'
-    ? `powershell -command "Start-Process '${url}'"`
-    : process.platform === 'darwin'
-      ? `open ${url}`
-      : `xdg-open ${url}`
-  exec(cmd, (err) => { if (err) console.warn('[browser] could not open:', err.message) })
+  if (HAS_EMBEDDED) {
+    // Compiled exe: show tray icon, open browser once on first start
+    setupTray(url)
+    const cmd = process.platform === 'win32'
+      ? `powershell -command "Start-Process '${url}'"`
+      : process.platform === 'darwin'
+        ? `open ${url}`
+        : `xdg-open ${url}`
+    exec(cmd, (err) => { if (err) console.warn('[browser] could not open:', err.message) })
+  } else if (!IS_DEV) {
+    // npm start (production without tray): just open browser
+    const cmd = process.platform === 'win32'
+      ? `powershell -command "Start-Process '${url}'"`
+      : process.platform === 'darwin'
+        ? `open ${url}`
+        : `xdg-open ${url}`
+    exec(cmd, (err) => { if (err) console.warn('[browser] could not open:', err.message) })
+  }
 })
