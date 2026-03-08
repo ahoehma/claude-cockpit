@@ -376,6 +376,9 @@ function trimMessage(text: string, maxLen = 240): string {
         class="mx-4 mb-2 rounded-lg overflow-hidden border"
         style="border-color: var(--border-inset)"
       >
+        <div class="px-3 py-1.5" style="background: var(--surface-inset)">
+          <span class="text-xs font-medium" style="color: var(--text-subtle)">Last prompt</span>
+        </div>
         <div v-if="agent.lastUserText" class="flex items-start gap-2 px-3 py-2" :class="{ 'border-b': !attentionBlock && agent.lastAssistantText }" style="border-color: var(--border-inset)">
           <span class="text-xs flex-shrink-0 font-semibold mt-0.5 w-4" style="color: var(--text-subtle)">›</span>
           <p class="text-xs leading-relaxed line-clamp-2" style="color: var(--text-muted)">{{ agent.lastUserText }}</p>
@@ -389,6 +392,9 @@ function trimMessage(text: string, maxLen = 240): string {
     <!-- Active: last user input + current action combined -->
     <template v-else>
       <div class="mx-4 mb-2 rounded-lg overflow-hidden border" style="border-color: var(--border-inset)">
+        <div class="px-3 py-1.5" style="background: var(--surface-inset)">
+          <span class="text-xs font-medium" style="color: var(--text-subtle)">Current prompt</span>
+        </div>
         <div v-if="agent.lastUserText" class="flex items-start gap-2 px-3 py-2 border-b" style="border-color: var(--border-inset)">
           <span class="text-xs flex-shrink-0 font-semibold mt-0.5 w-4" style="color: var(--text-subtle)">›</span>
           <p class="text-xs leading-relaxed line-clamp-2" style="color: var(--text-muted)">{{ agent.lastUserText }}</p>
