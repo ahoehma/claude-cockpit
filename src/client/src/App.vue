@@ -246,10 +246,10 @@ function formatCost(usd: number): string {
 </script>
 
 <template>
-  <div class="min-h-screen" style="background: var(--bg); color: var(--text); perspective: 1400px; position: relative">
+  <div class="flex flex-col" style="height: 100vh; background: var(--bg); color: var(--text); perspective: 1400px; position: relative; overflow: hidden">
 
     <!-- Header -->
-    <header class="sticky top-0 z-10 border-b" style="background: var(--header-bg); border-color: var(--header-border)">
+    <header class="flex-shrink-0 border-b" style="background: var(--header-bg); border-color: var(--header-border)">
       <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
 
         <!-- Logo + title -->
@@ -435,6 +435,7 @@ function formatCost(usd: number): string {
     </header>
 
     <!-- Main content -->
+    <div style="flex: 1; overflow-y: auto; min-height: 0; position: relative">
     <Transition name="view-flip">
 
       <!-- Loading -->
@@ -509,6 +510,7 @@ function formatCost(usd: number): string {
 
       </main>
     </Transition>
+    </div>
   </div>
 </template>
 

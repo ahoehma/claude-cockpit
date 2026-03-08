@@ -32,12 +32,16 @@
   --header-border:  #1e1e2e;
 }
 
+/* Smooth theme transitions for all elements */
+*, *::before, *::after {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
 body {
   background-color: var(--bg);
   color: var(--text);
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
   min-height: 100vh;
-  transition: background-color 0.2s, color 0.2s;
 }
 
 /* Status pulse animation */
@@ -55,19 +59,3 @@ body {
 ::-webkit-scrollbar-track { background: var(--surface); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
-
-/* Status pulse animation */
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-.status-pulse {
-  animation: pulse-dot 1.5s ease-in-out infinite;
-}
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #12121a; }
-::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a4a; }
