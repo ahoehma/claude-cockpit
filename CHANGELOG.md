@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/ahoehma/claude-cockpit/compare/v0.8.0...v0.8.1) (2026-03-08)
+
+
+### Bug Fixes
+
+* smooth theme transition, scrollbar in content area, visible scrollbar in light mode ([6c9b82b](https://github.com/ahoehma/claude-cockpit/commit/6c9b82bd7befd02cbdeb20324c412eeeb868229f))
+
 # [0.8.0](https://github.com/ahoehma/claude-cockpit/compare/v0.7.1...v0.8.0) (2026-03-08)
 
 
