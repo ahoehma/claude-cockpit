@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useNotifications } from './useNotifications.ts'
 import { useNow } from './useNow.ts'
-import { Wifi, WifiOff, RefreshCw, Bot, Sun, Moon, Layers, ChevronDown } from 'lucide-vue-next'
+import { Wifi, WifiOff, RefreshCw, Bot, Sun, Moon, Layers, ChevronDown, Bell, BellOff } from 'lucide-vue-next'
 import { useWebSocket } from './useWebSocket.ts'
 import { useTheme } from './useTheme.ts'
 import AgentCard from './components/AgentCard.vue'
@@ -20,12 +21,14 @@ const RECENT_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 type SortKey = 'last-event' | 'cost' | 'tokens' | 'calls' | 'duration'
 
-const filter = ref<Filter>('recent')
+const filter = ref<Filter>('active')
 const search = ref('')
 const sortKey = ref<SortKey>('last-event')
 const groupByProject = ref(false)
 
 const allSessions = computed(() => state.value?.sessions ?? [])
+
+const { permission: notifPermission, muted: notifMuted, toggleMute: toggleNotif } = useNotifications(allSessions)
 
 function isActive(s: Session) {
   // active: running right now
@@ -295,6 +298,20 @@ function formatCost(usd: number): string {
             <WifiOff :size="14" />
             <span class="text-xs">connecting...</span>
           </div>
+
+          <!-- Notification toggle -->
+          <button
+            @click="toggleNotif"
+            class="p-1.5 rounded-lg transition-colors"
+            style="border: 1px solid var(--border)"
+            :title="notifPermission === 'denied'  ? 'Notifications blocked — enable in browser settings' :
+                    notifPermission === 'default'  ? 'Enable browser notifications' :
+                    notifMuted                     ? 'Notifications muted — click to unmute' :
+                                                     'Notifications on — click to mute'"
+          >
+            <Bell    v-if="notifPermission === 'granted' && !notifMuted" :size="14" class="text-amber-500" />
+            <BellOff v-else                                               :size="14" style="color: var(--text-muted)" />
+          </button>
 
           <!-- Theme toggle -->
           <button
