@@ -33,8 +33,8 @@
     "build": "vite build",
     "build:exe": "bun run scripts/build-exe.ts",
     "start": "NODE_ENV=production tsx src/server/index.ts",
-    "release": "release-it",
-    "release:dry": "release-it --dry-run"
+    "release": "release-it --ci",
+    "release:dry": "release-it --dry-run --ci"
   },
   "devDependencies": {
     "@release-it/conventional-changelog": "^10.0.5",
