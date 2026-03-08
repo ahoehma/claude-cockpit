@@ -1,5 +1,12 @@
 # Changelog
 
+# [0.7.0](https://github.com/ahoehma/claude-cockpit/compare/v0.6.0...v0.7.0) (2026-03-08)
+
+
+### Features
+
+* UX overhaul, context tracking, smart waiting states ([5bf7f03](https://github.com/ahoehma/claude-cockpit/commit/5bf7f03cbb41685ec63baf04ad90252b335a9982))
+
 # [0.6.0](https://github.com/ahoehma/claude-cockpit/compare/v0.4.0...v0.6.0) (2026-03-08)
 
 
