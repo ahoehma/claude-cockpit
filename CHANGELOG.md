@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/ahoehma/claude-cockpit/compare/v0.7.0...v0.7.1) (2026-03-08)
+
+
+### Features
+
+* add Current/Last prompt label to exchange block in AgentCard ([931692e](https://github.com/ahoehma/claude-cockpit/commit/931692ebea9f3c8b1a45a299918569e79b459479))
+
 # [0.7.0](https://github.com/ahoehma/claude-cockpit/compare/v0.6.0...v0.7.0) (2026-03-08)
 
 
