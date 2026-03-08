@@ -1,5 +1,5 @@
 {
-  "name": "claude-cockpit",
+  "name": "@ahoehma/claude-cockpit",
   "version": "0.1.0",
   "description": "Local real-time dashboard for monitoring Claude Code agent sessions",
   "author": "ahoehma",
