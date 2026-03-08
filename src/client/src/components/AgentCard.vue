@@ -18,14 +18,16 @@ const tasksExpanded   = ref(false)
 
 // ── Status ────────────────────────────────────────────────────────────────────
 const statusConfig = computed(() => {
+  const wk = (props.agent as any).waitingKind as string | undefined
   if (props.agent.needsUserReaction) {
     return { color: 'text-amber-500', bg: 'bg-amber-500', label: 'NEEDS RESPONSE', pulse: true }
   }
+  if (props.agent.status === 'waiting' && wk === 'output-available') {
+    return { color: 'text-indigo-400', bg: 'bg-indigo-400', label: 'OUTPUT READY', pulse: false }
+  }
   switch (props.agent.status) {
     case 'active':    return { color: 'text-emerald-500', bg: 'bg-emerald-500', label: 'ACTIVE',   pulse: true }
-    case 'waiting':   return props.agent.needsUserReaction
-      ? { color: 'text-amber-500', bg: 'bg-amber-500', label: 'WAITING', pulse: true }
-      : { color: 'text-slate-400', bg: 'bg-slate-400', label: 'DONE',    pulse: false }
+    case 'waiting':   return { color: 'text-slate-400',   bg: 'bg-slate-400',   label: 'DONE',     pulse: false }
     case 'idle':      return { color: 'text-slate-400',   bg: 'bg-slate-400',   label: 'IDLE',     pulse: false }
     case 'completed': return { color: 'text-slate-500',   bg: 'bg-slate-500',   label: 'DONE',     pulse: false }
   }
@@ -72,16 +74,33 @@ function relativeTime(ts: string): string {
   return `${h}h ${m % 60}m ago`
 }
 
-function duration(start: string, end?: string): string {
-  const endMs = end ? new Date(end).getTime() : now.value
-  const diff = endMs - new Date(start).getTime()
-  const s = Math.floor(diff / 1000)
+function formatMs(ms: number): string {
+  const s = Math.floor(ms / 1000)
   if (s < 60) return `${s}s`
   const m = Math.floor(s / 60)
   if (m < 60) return `${m}m`
   const h = Math.floor(m / 60)
   return `${h}h ${m % 60}m`
 }
+
+function duration(start: string | null, end?: string | null, ms?: number): string {
+  if (ms !== undefined) return formatMs(ms)
+  if (!start) return '—'
+  const endMs = end ? new Date(end).getTime() : now.value
+  return formatMs(endMs - new Date(start).getTime())
+}
+
+const grossDuration = computed(() => {
+  const activeMs = (props.agent as any).activeTimeMs as number | undefined
+  const start = props.agent.startTime
+  const end = props.agent.status === 'active' ? undefined : props.agent.lastActivity
+  const endMs = end ? new Date(end).getTime() : now.value
+  const gross = endMs - new Date(start).getTime()
+  if (!activeMs) return formatMs(gross)  // no active time data — just show gross
+  // Only hide if they're nearly identical (< 5min difference)
+  if (gross - activeMs < 5 * 60_000) return null
+  return formatMs(gross)
+})
 
 // ── Cost / tokens ─────────────────────────────────────────────────────────────
 function formatCost(usd: number): string {
@@ -107,6 +126,25 @@ const hasSubAgentCost = computed(() => {
   const s = props.agent as Session
   return s.subAgents.length > 0 && s.subAgents.some(a => a.tokenUsage.estimatedCostUsd > 0)
 })
+
+// ── Context window ────────────────────────────────────────────────────────────
+const contextPct = computed(() => {
+  const a = props.agent as any
+  if (!a.contextTokens || !a.contextLimit) return null
+  return Math.min(100, Math.round((a.contextTokens / a.contextLimit) * 100))
+})
+
+const contextBar = computed(() => {
+  const pct = contextPct.value
+  if (pct === null) return null
+  if (props.agent.status === 'completed') return null
+  const color = pct >= 90 ? '#ef4444' : pct >= 75 ? '#f59e0b' : '#10b981'
+  return { pct, color }
+})
+
+function formatK(n: number): string {
+  return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+}
 
 // ── Task progress ─────────────────────────────────────────────────────────────
 const taskDone     = computed(() => (props.agent.tasks ?? []).filter(t => t.status === 'completed').length)
@@ -160,7 +198,17 @@ const attentionBlock = computed(() => {
   }
 
   if (a.status !== 'waiting') return null
-  if (!a.needsUserReaction) return null  // session finished long ago, no longer needs response
+
+  const wk = (a as any).waitingKind as string | undefined
+
+  // output-available: show the output but only if recent (within 2h)
+  if (wk === 'output-available') {
+    if (ageMs.value > 2 * 3600_000) return null
+    if (a.lastAssistantText) return { kind: 'output' as const, text: a.lastAssistantText }
+    return null
+  }
+
+  if (!a.needsUserReaction) return null  // old session, no longer needs response
 
   // Claude finished its turn (end_turn) — show last message
   if (a.lastAssistantText) {
@@ -189,38 +237,56 @@ function trimMessage(text: string, maxLen = 240): string {
       ? `background: var(--surface-sub); border-color: var(--border-subtle)`
       : agent.needsUserReaction
         ? 'background: var(--surface); border-color: #d97706; box-shadow: 0 0 0 1px #d9770640, 0 4px 12px #d9770618'
-        : agent.status === 'active'
-          ? 'background: var(--surface); border-color: #10b981; box-shadow: 0 0 0 1px #10b98120'
-          : `background: var(--surface); border-color: var(--border)`"
+        : (agent as any).waitingKind === 'output-available' && agent.status === 'waiting'
+          ? 'background: var(--surface); border-color: #6366f1; box-shadow: 0 0 0 1px #6366f120'
+          : agent.status === 'active'
+            ? 'background: var(--surface); border-color: #10b981; box-shadow: 0 0 0 1px #10b98120'
+            : `background: var(--surface); border-color: var(--border)`"
   >
-    <!-- Header row -->
+    <!-- ── Header ── -->
     <div class="flex items-start justify-between px-4 pt-3 pb-2">
+      <!-- Left: status dot + name + branch -->
       <div class="flex items-center gap-2 min-w-0">
         <span :class="['w-2 h-2 rounded-full flex-shrink-0', statusConfig.bg, statusConfig.pulse ? 'status-pulse' : '']" />
         <span v-if="isSubAgent" class="flex-shrink-0" style="color: var(--text-subtle)">
           <ChevronRight :size="12" class="inline" />
         </span>
-        <span class="font-semibold text-sm truncate">{{ projectLabel }}</span>
+        <div class="min-w-0">
+          <span class="font-semibold text-sm truncate block">{{ projectLabel }}</span>
+          <span class="text-xs truncate block" style="color: var(--text-subtle)">{{ projectPath }}</span>
+        </div>
         <span v-if="agent.gitBranch" class="flex items-center gap-1 text-xs flex-shrink-0" style="color: var(--text-subtle)">
           <GitBranch :size="11" />
           <span class="truncate max-w-32">{{ agent.gitBranch }}</span>
         </span>
       </div>
-      <div class="flex items-center gap-2 flex-shrink-0 ml-2">
-        <span :class="['text-xs font-mono font-semibold', statusConfig.color]">{{ statusConfig.label }}</span>
-        <span
-          v-if="integrationBadge"
-          :class="['flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border', integrationBadge.cls]"
-        >
-          <component :is="integrationBadge.icon" :size="10" />
-          {{ integrationBadge.label }}
-        </span>
+      <!-- Right: status + integration badge + ctx% -->
+      <div class="flex flex-col items-end gap-1 flex-shrink-0 ml-3">
+        <div class="flex items-center gap-2">
+          <span :class="['text-xs font-mono font-semibold', statusConfig.color]">{{ statusConfig.label }}</span>
+          <span
+            v-if="integrationBadge"
+            :class="['flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border', integrationBadge.cls]"
+          >
+            <component :is="integrationBadge.icon" :size="10" />
+            {{ integrationBadge.label }}
+          </span>
+        </div>
+        <!-- Context % under status label -->
+        <div v-if="contextBar" class="flex items-center gap-1.5">
+          <div class="w-14 h-1 rounded-full overflow-hidden" style="background: var(--border)">
+            <div
+              class="h-full rounded-full transition-all duration-500"
+              :style="{ width: contextBar.pct + '%', background: contextBar.color }"
+            />
+          </div>
+          <span
+            class="text-xs font-mono"
+            :style="{ color: contextBar.color }"
+            :title="`${formatK((agent as any).contextTokens)} / ${formatK((agent as any).contextLimit)} tokens`"
+          >{{ contextBar.pct }}%</span>
+        </div>
       </div>
-    </div>
-
-    <!-- Path -->
-    <div class="px-4 pb-2">
-      <span class="text-xs truncate block" style="color: var(--text-subtle)">{{ projectPath }}</span>
     </div>
 
     <!-- ── Initial prompt ── -->
@@ -303,16 +369,80 @@ function trimMessage(text: string, maxLen = 240): string {
       </div>
     </div>
 
-    <!-- ── Attention block (waiting for user) ── -->
+    <!-- ── Last exchange ── -->
+    <template v-if="agent.status !== 'active'">
+      <div
+        v-if="agent.lastUserText || (!attentionBlock && agent.lastAssistantText)"
+        class="mx-4 mb-2 rounded-lg overflow-hidden border"
+        style="border-color: var(--border-inset)"
+      >
+        <div v-if="agent.lastUserText" class="flex items-start gap-2 px-3 py-2" :class="{ 'border-b': !attentionBlock && agent.lastAssistantText }" style="border-color: var(--border-inset)">
+          <span class="text-xs flex-shrink-0 font-semibold mt-0.5 w-4" style="color: var(--text-subtle)">›</span>
+          <p class="text-xs leading-relaxed line-clamp-2" style="color: var(--text-muted)">{{ agent.lastUserText }}</p>
+        </div>
+        <div v-if="!attentionBlock && agent.lastAssistantText" class="flex items-start gap-2 px-3 py-2">
+          <span class="text-xs flex-shrink-0 font-semibold mt-0.5 w-4" style="color: var(--text-subtle)">ai</span>
+          <p class="text-xs leading-relaxed line-clamp-2" style="color: var(--text-muted)">{{ trimMessage(agent.lastAssistantText) }}</p>
+        </div>
+      </div>
+    </template>
+    <!-- Active: last user input + current action combined -->
+    <template v-else>
+      <div class="mx-4 mb-2 rounded-lg overflow-hidden border" style="border-color: var(--border-inset)">
+        <div v-if="agent.lastUserText" class="flex items-start gap-2 px-3 py-2 border-b" style="border-color: var(--border-inset)">
+          <span class="text-xs flex-shrink-0 font-semibold mt-0.5 w-4" style="color: var(--text-subtle)">›</span>
+          <p class="text-xs leading-relaxed line-clamp-2" style="color: var(--text-muted)">{{ agent.lastUserText }}</p>
+        </div>
+        <div
+          class="flex items-center gap-2 px-3 py-2"
+          :style="agent.needsUserReaction && currentAction ? 'background: rgba(217,119,6,0.08)' : ''"
+        >
+          <Loader2 v-if="!currentAction" :size="11" class="text-indigo-400 flex-shrink-0 animate-spin" />
+          <component v-else :is="currentAction.icon" :size="11" :class="agent.needsUserReaction ? 'text-amber-500' : 'text-indigo-400'" class="flex-shrink-0" />
+          <button
+            v-if="currentAction"
+            class="flex items-center gap-2 flex-1 min-w-0 text-left"
+            @click="actionExpanded = !actionExpanded"
+          >
+            <span class="text-xs font-semibold flex-shrink-0" :class="agent.needsUserReaction ? 'text-amber-500' : 'text-indigo-400'">{{ currentAction.label }}</span>
+            <span class="text-xs truncate font-mono" style="color: var(--text-muted)">{{ currentAction.summary }}</span>
+            <ChevronDown :size="11" class="flex-shrink-0 ml-auto transition-transform" :class="actionExpanded ? 'rotate-180' : ''" style="color: var(--text-subtle)" />
+          </button>
+          <span v-else class="text-xs" style="color: var(--text-subtle)">working...</span>
+          <span v-if="agent.needsUserReaction && currentAction" class="text-xs font-semibold text-amber-500 flex-shrink-0">← confirm in terminal</span>
+        </div>
+        <div v-if="currentAction && actionExpanded" class="border-t" style="border-color: var(--border-inset)">
+          <pre class="px-3 py-2 text-xs overflow-x-auto leading-relaxed" style="color: var(--text-muted); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto">{{ currentAction.full }}</pre>
+        </div>
+      </div>
+    </template>
+
+    <!-- ── Attention block ── -->
     <div
       v-if="attentionBlock"
       class="mx-4 mb-2 rounded-lg border overflow-hidden"
-      style="border-color: #d97706; background: rgba(217, 119, 6, 0.06)"
+      :style="attentionBlock.kind === 'output'
+        ? 'border-color: #6366f1; background: rgba(99, 102, 241, 0.05)'
+        : 'border-color: #d97706; background: rgba(217, 119, 6, 0.06)'"
     >
-      <div class="flex items-center gap-2 px-3 py-1.5" style="background: rgba(217, 119, 6, 0.1)">
-        <MessageSquare :size="12" class="text-amber-500 flex-shrink-0" />
-        <span class="text-xs font-semibold text-amber-500">
-          {{ attentionBlock.kind === 'stuck' ? '⚠ Go to terminal — action may be required' : 'Waiting for your response' }}
+      <div
+        class="flex items-center gap-2 px-3 py-1.5"
+        :style="attentionBlock.kind === 'output'
+          ? 'background: rgba(99, 102, 241, 0.08)'
+          : 'background: rgba(217, 119, 6, 0.1)'"
+      >
+        <MessageSquare
+          :size="12"
+          class="flex-shrink-0"
+          :class="attentionBlock.kind === 'output' ? 'text-indigo-400' : 'text-amber-500'"
+        />
+        <span
+          class="text-xs font-semibold"
+          :class="attentionBlock.kind === 'output' ? 'text-indigo-400' : 'text-amber-500'"
+        >
+          {{ attentionBlock.kind === 'stuck'   ? '⚠ Go to terminal — action may be required'
+           : attentionBlock.kind === 'output'  ? 'Output ready'
+           :                                     'Waiting for your response' }}
         </span>
       </div>
       <div v-if="attentionBlock.text" class="px-3 py-2">
@@ -325,9 +455,9 @@ function trimMessage(text: string, maxLen = 240): string {
       </div>
     </div>
 
-    <!-- ── Current action ── -->
+    <!-- ── Current action (non-active sessions: last tool used) ── -->
     <div
-      v-if="currentAction"
+      v-if="currentAction && agent.status !== 'active'"
       class="mx-4 mb-2 rounded-lg border overflow-hidden"
       style="background: var(--surface-inset); border-color: var(--border-inset)"
     >
@@ -335,8 +465,7 @@ function trimMessage(text: string, maxLen = 240): string {
         class="w-full flex items-center gap-2 px-3 py-2 text-left"
         @click="actionExpanded = !actionExpanded"
       >
-        <Loader2 v-if="agent.status === 'active'" :size="13" class="text-indigo-500 flex-shrink-0 animate-spin" />
-        <component v-else :is="currentAction.icon" :size="13" class="text-indigo-500 flex-shrink-0" />
+        <component :is="currentAction.icon" :size="13" class="text-indigo-500 flex-shrink-0" />
         <span class="text-indigo-500 text-xs font-semibold flex-shrink-0">{{ currentAction.label }}</span>
         <span class="text-xs truncate font-mono flex-1" style="color: var(--text-muted)">{{ currentAction.summary }}</span>
         <ChevronDown
@@ -361,7 +490,10 @@ function trimMessage(text: string, maxLen = 240): string {
     >
       <span class="flex items-center gap-1 text-xs" style="color: var(--text-subtle)" title="Session duration">
         <Timer :size="11" />
-        {{ duration(agent.startTime, agent.status === 'active' ? undefined : agent.lastActivity) }}
+        {{ (agent as any).activeTimeMs ? duration(null, null, (agent as any).activeTimeMs) : grossDuration }}<span
+          v-if="(agent as any).activeTimeMs && grossDuration"
+          class="ml-1 opacity-50"
+        >({{ grossDuration }})</span>
       </span>
       <span class="flex items-center gap-1 text-xs" style="color: var(--text-subtle)" title="Last activity">
         <Clock :size="11" />

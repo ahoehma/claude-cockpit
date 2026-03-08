@@ -31,10 +31,7 @@ const allSessions = computed(() => state.value?.sessions ?? [])
 const { permission: notifPermission, muted: notifMuted, toggleMute: toggleNotif } = useNotifications(allSessions)
 
 function isActive(s: Session) {
-  // active: running right now
-  // waiting + recent: Claude finished and needs response, but only within 24h window
-  // (old abandoned sessions with end_turn don't pollute the active view)
-  return s.status === 'active' || (s.needsUserReaction && isRecent(s))
+  return s.status === 'active' || (s.needsUserReaction && isRecent(s)) || isOutputReady(s)
 }
 
 function isRecent(s: Session) {
@@ -42,7 +39,11 @@ function isRecent(s: Session) {
 }
 
 function needsResponse(s: Session) {
-  return s.needsUserReaction && isRecent(s)
+  return s.needsUserReaction && isRecent(s)  // only 'needs-decision' sessions (see parser.ts)
+}
+
+function isOutputReady(s: Session) {
+  return (s as any).waitingKind === 'output-available' && s.status === 'waiting' && isRecent(s)
 }
 
 function matchesSearch(s: Session): boolean {
@@ -73,8 +74,13 @@ const filteredSessions = computed(() => {
   const searched = byFilter.filter(matchesSearch)
 
   return [...searched].sort((a, b) => {
-    // needsUserReaction → top, then waiting, then rest
-    const priority = (s: Session) => s.needsUserReaction ? 0 : s.status === 'waiting' ? 1 : 2
+    // active sessions first, then waiting-for-response, then rest
+    const priority = (s: Session) =>
+      s.status === 'active' && s.needsUserReaction ? 0 :  // running + stuck tool
+      s.status === 'active'                         ? 1 :  // running
+      s.needsUserReaction                           ? 2 :  // finished, needs response
+      s.status === 'waiting'                        ? 3 :  // finished, old
+                                                      4
     const ap = priority(a), bp = priority(b)
     if (ap !== bp) return ap - bp
 

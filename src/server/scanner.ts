@@ -134,11 +134,16 @@ export function scanAllSessions(): CockpitState {
         needsUserReaction: parsed.needsUserReaction,
         lastTool: parsed.lastTool,
         currentTask: parsed.currentTask,
+        lastUserText: parsed.lastUserText,
         lastAssistantText: parsed.lastAssistantText,
         tokenUsage: parsed.tokenUsage,
         toolCallCount: parsed.toolCallCount,
         tasks: parsed.tasks,
         subAgents,
+        contextTokens: parsed.contextTokens,
+        contextLimit: parsed.contextLimit,
+        waitingKind: parsed.waitingKind,
+        activeTimeMs: parsed.activeTimeMs,
       }
 
       sessions.push(session)

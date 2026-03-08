@@ -1,5 +1,18 @@
 import { readFileSync } from 'fs'
-import type { Session, SubAgent, TokenUsage, ToolCall, SessionStatus, AgentTask } from './models.ts'
+import type { Session, SubAgent, TokenUsage, ToolCall, SessionStatus, AgentTask, WaitingKind } from './models.ts'
+
+const QUESTION_RE = /(\?)\s*$|(\?)\s*\n\s*$/m
+const DECISION_RE = /\b(soll ich|shall i|would you like|do you want|möchtest du|willst du|bitte bestätige|please confirm|let me know what|tell me (what|which|how)|wie soll ich|was soll ich|which (option|approach)|what (should|would)|can i (proceed|continue|go ahead)|darf ich|soll das)\b/i
+
+function looksLikeDecisionNeeded(text: string): boolean {
+  const t = text.trim()
+  // Last non-empty line ends with ?
+  const lines = t.split('\n').map(l => l.trim()).filter(Boolean)
+  const lastLine = lines[lines.length - 1] ?? ''
+  if (lastLine.endsWith('?')) return true
+  // Pattern match
+  return DECISION_RE.test(t)
+}
 
 const COST_PER_M_INPUT = 3.0    // USD per million input tokens (Sonnet)
 const COST_PER_M_OUTPUT = 15.0  // USD per million output tokens
@@ -36,6 +49,23 @@ function describeToolCall(name: string, input: Record<string, unknown>): string 
   }
 }
 
+const CONTEXT_LIMITS: Record<string, number> = {
+  'claude-opus-4':     200_000,
+  'claude-sonnet-4':   200_000,
+  'claude-haiku-4':    200_000,
+  'claude-3-5-sonnet': 200_000,
+  'claude-3-5-haiku':  200_000,
+  'claude-3-opus':     200_000,
+}
+
+function contextLimitForModel(model?: string): number {
+  if (!model) return 200_000
+  for (const [prefix, limit] of Object.entries(CONTEXT_LIMITS)) {
+    if (model.startsWith(prefix)) return limit
+  }
+  return 200_000
+}
+
 export function parseJsonl(filePath: string): {
   cwd: string
   gitBranch?: string
@@ -47,9 +77,14 @@ export function parseJsonl(filePath: string): {
   currentTool?: ToolCall
   lastTool?: ToolCall
   currentTask?: string
+  lastUserText?: string
   tokenUsage: TokenUsage
   toolCallCount: number
   tasks: AgentTask[]
+  contextTokens?: number
+  contextLimit: number
+  waitingKind?: WaitingKind
+  activeTimeMs: number
 } {
   let lines: string[]
   try {
@@ -68,7 +103,11 @@ export function parseJsonl(filePath: string): {
   const usage: Omit<TokenUsage, 'estimatedCostUsd'> = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 }
   let toolCallCount = 0
   let lastTool: ToolCall | undefined
+  let lastUserText: string | undefined
   let lastAssistantText: string | undefined
+  let lastAssistantFullText: string | undefined  // untruncated, used for question detection
+  let lastContextTokens: number | undefined
+  let model: string | undefined
   // Task tracking: tool_use.id → task (pending result), numeric id → task (confirmed)
   const pendingTasks = new Map<string, Omit<AgentTask, 'id'>>()  // tool_use.id → partial
   const tasks        = new Map<string, AgentTask>()              // numeric id → task
@@ -77,6 +116,7 @@ export function parseJsonl(filePath: string): {
   let lastStopReason: string | null = null
   let lastMsgHasToolResult = false
   let lastMsgHasToolUse = false
+  const allTimestamps: number[] = []  // for active time calculation
 
   for (const line of lines) {
     let entry: Record<string, unknown>
@@ -97,7 +137,7 @@ export function parseJsonl(filePath: string): {
       if (ts) startTime = ts
     }
 
-    if (ts) lastActivity = ts
+    if (ts) { lastActivity = ts; allTimestamps.push(new Date(ts).getTime()) }
 
     const msg = entry.message as Record<string, unknown> | undefined
     if (!msg) continue
@@ -124,6 +164,19 @@ export function parseJsonl(filePath: string): {
       lastMsgHasToolResult = Array.isArray(content) &&
         (content as Record<string, unknown>[]).some(b => b.type === 'tool_result')
       lastMsgHasToolUse = false
+
+      // Track last user text (not tool results)
+      if (!lastMsgHasToolResult) {
+        if (typeof content === 'string' && content.trim()) {
+          lastUserText = content.slice(0, 200)
+        } else if (Array.isArray(content)) {
+          const parts = (content as Record<string, unknown>[])
+            .filter(b => b.type === 'text' && typeof b.text === 'string')
+            .map(b => (b.text as string).trim())
+            .filter(Boolean)
+          if (parts.length) lastUserText = parts.join('\n').slice(0, 200)
+        }
+      }
 
       // Resolve pending TaskCreate calls: "Task #3 created successfully: ..."
       if (Array.isArray(content)) {
@@ -178,19 +231,28 @@ export function parseJsonl(filePath: string): {
           }
         }
         if (textParts.length > 0) {
-          lastAssistantText = textParts.join('\n\n')
+          lastAssistantFullText = textParts.join('\n\n')
+          lastAssistantText = lastAssistantFullText.slice(0, 200)
         }
       }
 
       // Accumulate token usage — use only top-level cache_creation_input_tokens.
       // The nested cache_creation.ephemeral_* fields are the same values broken out,
       // so we must NOT add both or we double-count.
+      if (!model && msg.model) model = msg.model as string
+
       const u = msg.usage as Record<string, unknown> | undefined
       if (u) {
         usage.inputTokens        += (u.input_tokens as number) || 0
         usage.outputTokens       += (u.output_tokens as number) || 0
         usage.cacheCreationTokens += (u.cache_creation_input_tokens as number) || 0
         usage.cacheReadTokens    += (u.cache_read_input_tokens as number) || 0
+        // Track latest context size — must include cache_read + cache_creation since Claude Code
+        // sends most tokens via cache (input_tokens alone is often just 3)
+        const it = ((u.input_tokens as number) || 0)
+                 + ((u.cache_read_input_tokens as number) || 0)
+                 + ((u.cache_creation_input_tokens as number) || 0)
+        if (it > 0) lastContextTokens = it
       }
     }
   }
@@ -233,15 +295,25 @@ export function parseJsonl(filePath: string): {
   }
 
   // needsUserReaction: session needs the user's attention.
-  //  • end_turn + < 2h: Claude finished and is waiting for a response
-  //  • tool_use + < 3h: tool was dispatched but has no result yet
-  //    → no minimum delay: tool confirmations need immediate attention
-  //      (user may need to type y/n in terminal right now)
+  //  • end_turn + explicit question/decision + < 2h
+  //  • tool_use + < 3h: tool was dispatched but has no result yet (needs y/n in terminal)
   const NEEDS_RESPONSE_MAX = 2 * 3600_000    // 2h for end_turn sessions
   const STUCK_MAX = 3 * 3600_000             // 3h: after that, consider it abandoned
 
+  // Active time: sum of gaps between consecutive timestamps < 30min
+  const ACTIVE_GAP_MS = 30 * 60_000
+  let activeTimeMs = 0
+  for (let i = 1; i < allTimestamps.length; i++) {
+    const gap = allTimestamps[i] - allTimestamps[i - 1]
+    if (gap < ACTIVE_GAP_MS) activeTimeMs += gap
+  }
+
+  const waitingKind: WaitingKind | undefined = claudeFinished
+    ? (looksLikeDecisionNeeded(lastAssistantFullText ?? '') ? 'needs-decision' : 'output-available')
+    : undefined
+
   const needsUserReaction =
-    (claudeFinished && ageMs < NEEDS_RESPONSE_MAX) ||
+    (claudeFinished && waitingKind === 'needs-decision' && ageMs < NEEDS_RESPONSE_MAX) ||
     (toolDispatched && ageMs < STUCK_MAX)
 
   return {
@@ -253,12 +325,17 @@ export function parseJsonl(filePath: string): {
     lastActivity,
     status,
     needsUserReaction,
+    waitingKind,
     lastTool,
     currentTask,
+    lastUserText,
     lastAssistantText,
     tokenUsage,
     toolCallCount,
     tasks: Array.from(tasks.values()),
+    contextTokens: lastContextTokens,
+    contextLimit: contextLimitForModel(model),
+    activeTimeMs,
   }
 }
 
@@ -294,9 +371,14 @@ export function parseSubAgent(filePath: string, agentId: string, metaPath: strin
     needsUserReaction: parsed.needsUserReaction,
     lastTool: parsed.lastTool,
     currentTask: parsed.currentTask,
+    lastUserText: parsed.lastUserText,
     lastAssistantText: parsed.lastAssistantText,
     tokenUsage: parsed.tokenUsage,
     toolCallCount: parsed.toolCallCount,
     tasks: parsed.tasks,
+    contextTokens: parsed.contextTokens,
+    contextLimit: parsed.contextLimit,
+    waitingKind: parsed.waitingKind,
+    activeTimeMs: parsed.activeTimeMs,
   }
 }
