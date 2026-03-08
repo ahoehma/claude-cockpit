@@ -2,11 +2,12 @@
 import { ref, computed, watch } from 'vue'
 import { useNotifications } from './useNotifications.ts'
 import { useNow } from './useNow.ts'
-import { Wifi, WifiOff, RefreshCw, Bot, Sun, Moon, Layers, ChevronDown, Bell, BellOff } from 'lucide-vue-next'
+import { Wifi, WifiOff, RefreshCw, Bot, Sun, Moon, Layers, ChevronDown, Bell, BellOff, LayoutDashboard, Gauge } from 'lucide-vue-next'
 import { useWebSocket } from './useWebSocket.ts'
 import { useTheme } from './useTheme.ts'
 import AgentCard from './components/AgentCard.vue'
 import SubAgentSection from './components/SubAgentSection.vue'
+import CockpitView from './components/CockpitView.vue'
 import type { Session } from '../../../server/models.ts'
 
 const { state, connected, lastUpdate } = useWebSocket()
@@ -25,6 +26,8 @@ const filter = ref<Filter>('active')
 const search = ref('')
 const sortKey = ref<SortKey>('last-event')
 const groupByProject = ref(false)
+type ViewMode = 'dashboard' | 'cockpit'
+const viewMode = ref<ViewMode>('dashboard')
 
 const allSessions = computed(() => state.value?.sessions ?? [])
 
@@ -144,7 +147,15 @@ const groupedSessions = computed((): ProjectGroup[] | null => {
   return [...map.values()].sort((a, b) => {
     const pd = groupPriority(a) - groupPriority(b)
     if (pd !== 0) return pd
-    return b.lastActivity - a.lastActivity
+    switch (sortKey.value) {
+      case 'cost':     return b.totalCost - a.totalCost
+      case 'tokens':   return b.sessions.reduce((s, x) => s + x.tokenUsage.inputTokens + x.tokenUsage.outputTokens, 0)
+                            - a.sessions.reduce((s, x) => s + x.tokenUsage.inputTokens + x.tokenUsage.outputTokens, 0)
+      case 'calls':    return b.sessions.reduce((s, x) => s + x.toolCallCount, 0)
+                            - a.sessions.reduce((s, x) => s + x.toolCallCount, 0)
+      case 'duration': return a.lastActivity - b.lastActivity
+      default:         return b.lastActivity - a.lastActivity
+    }
   })
 })
 
@@ -235,7 +246,7 @@ function formatCost(usd: number): string {
 </script>
 
 <template>
-  <div class="min-h-screen" style="background: var(--bg); color: var(--text)">
+  <div class="min-h-screen" style="background: var(--bg); color: var(--text); perspective: 1400px; position: relative">
 
     <!-- Header -->
     <header class="sticky top-0 z-10 border-b" style="background: var(--header-bg); border-color: var(--header-border)">
@@ -318,6 +329,19 @@ function formatCost(usd: number): string {
           >
             <Bell    v-if="notifPermission === 'granted' && !notifMuted" :size="14" class="text-amber-500" />
             <BellOff v-else                                               :size="14" style="color: var(--text-muted)" />
+          </button>
+
+          <!-- View toggle -->
+          <button
+            @click="viewMode = viewMode === 'dashboard' ? 'cockpit' : 'dashboard'"
+            class="p-1.5 rounded-lg transition-colors"
+            :style="viewMode === 'cockpit'
+              ? 'background: #6366f1; color: white; border: 1px solid #6366f1'
+              : `border: 1px solid var(--border); color: var(--text-muted)`"
+            :title="viewMode === 'dashboard' ? 'Switch to cockpit view' : 'Switch to dashboard view'"
+          >
+            <Gauge v-if="viewMode === 'dashboard'" :size="14" />
+            <LayoutDashboard v-else :size="14" />
           </button>
 
           <!-- Theme toggle -->
@@ -411,70 +435,107 @@ function formatCost(usd: number): string {
     </header>
 
     <!-- Main content -->
-    <main class="max-w-7xl mx-auto px-6 py-6">
+    <Transition name="view-flip">
 
       <!-- Loading -->
-      <div v-if="!state" class="flex items-center justify-center h-64">
+      <div v-if="!state" key="loading" class="max-w-7xl mx-auto px-6 py-6 flex items-center justify-center h-64">
         <div class="flex items-center gap-3" style="color: var(--text-muted)">
           <RefreshCw :size="20" class="animate-spin" />
           <span>Connecting to Claude Cockpit server...</span>
         </div>
       </div>
 
-      <!-- Empty state -->
-      <div v-else-if="filteredSessions.length === 0" class="flex flex-col items-center justify-center h-64 gap-4">
-        <Bot :size="48" style="color: var(--border)" />
-        <div class="text-center">
-          <p class="text-sm" style="color: var(--text-muted)">
-            {{ filter === 'needs-response' ? 'No sessions need your attention' : filter === 'active' ? 'No active sessions right now' : 'No sessions found' }}
-          </p>
-          <p class="text-xs mt-1" style="color: var(--text-subtle)">
-            {{ filter !== 'all' ? 'Try switching to "All" to see older sessions' : 'Start a Claude Code session to see it here' }}
-          </p>
-        </div>
-      </div>
+      <!-- Cockpit view -->
+      <main v-else-if="viewMode === 'cockpit'" key="cockpit" class="max-w-7xl mx-auto px-6 py-4">
+        <CockpitView :sessions="filteredSessions" :groups="groupedSessions" :now="now" />
+      </main>
 
-      <!-- Sessions: flat view -->
-      <div v-else-if="!groupByProject" class="space-y-4">
-        <template v-for="session in filteredSessions" :key="session.sessionId">
-          <AgentCard :agent="session" />
-          <SubAgentSection
-            v-if="session.subAgents.length > 0"
-            :session="session"
-            :expand-level="subAgentLevel.get(session.sessionId) ?? 0"
-            :sorted-sub-agents="sortedSubAgents(session)"
-            :summary="subAgentSummary(session)"
-            @cycle="cycleSubAgents(session.sessionId)"
-          />
-        </template>
-      </div>
+      <!-- Dashboard view -->
+      <main v-else key="dashboard" class="max-w-7xl mx-auto px-6 py-6">
 
-      <!-- Sessions: grouped view -->
-      <div v-else class="space-y-6">
-        <div v-for="group in groupedSessions" :key="group.key">
-          <div class="flex items-center gap-3 mb-3">
-            <span class="text-xs font-semibold" style="color: var(--text-muted)">{{ group.label }}</span>
-            <span v-if="group.activeSessions > 0" class="text-xs text-emerald-500">{{ group.activeSessions }} active</span>
-            <span class="text-xs" style="color: var(--text-subtle)">{{ group.sessions.length }} session{{ group.sessions.length !== 1 ? 's' : '' }}</span>
-            <div class="flex-1 border-t" style="border-color: var(--border)"></div>
-            <span class="text-xs font-mono text-emerald-600">{{ formatCost(group.totalCost) }}</span>
-          </div>
-          <div class="space-y-4">
-            <template v-for="session in group.sessions" :key="session.sessionId">
-              <AgentCard :agent="session" />
-              <SubAgentSection
-                v-if="session.subAgents.length > 0"
-                :session="session"
-                :expanded="expandedSubAgents.has(session.sessionId)"
-                :sorted-sub-agents="sortedSubAgents(session)"
-                :summary="subAgentSummary(session)"
-                @toggle="toggleSubAgents(session.sessionId)"
-              />
-            </template>
+        <!-- Empty state -->
+        <div v-if="filteredSessions.length === 0" class="flex flex-col items-center justify-center h-64 gap-4">
+          <Bot :size="48" style="color: var(--border)" />
+          <div class="text-center">
+            <p class="text-sm" style="color: var(--text-muted)">
+              {{ filter === 'needs-response' ? 'No sessions need your attention' : filter === 'active' ? 'No active sessions right now' : 'No sessions found' }}
+            </p>
+            <p class="text-xs mt-1" style="color: var(--text-subtle)">
+              {{ filter !== 'all' ? 'Try switching to "All" to see older sessions' : 'Start a Claude Code session to see it here' }}
+            </p>
           </div>
         </div>
-      </div>
 
-    </main>
+        <!-- Sessions: flat view -->
+        <div v-else-if="!groupByProject" class="space-y-4">
+          <template v-for="session in filteredSessions" :key="session.sessionId">
+            <AgentCard :agent="session" />
+            <SubAgentSection
+              v-if="session.subAgents.length > 0"
+              :session="session"
+              :expand-level="subAgentLevel.get(session.sessionId) ?? 0"
+              :sorted-sub-agents="sortedSubAgents(session)"
+              :summary="subAgentSummary(session)"
+              @cycle="cycleSubAgents(session.sessionId)"
+            />
+          </template>
+        </div>
+
+        <!-- Sessions: grouped view -->
+        <div v-else class="space-y-6">
+          <div v-for="group in groupedSessions" :key="group.key">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="text-xs font-semibold" style="color: var(--text-muted)">{{ group.label }}</span>
+              <span v-if="group.activeSessions > 0" class="text-xs text-emerald-500">{{ group.activeSessions }} active</span>
+              <span class="text-xs" style="color: var(--text-subtle)">{{ group.sessions.length }} session{{ group.sessions.length !== 1 ? 's' : '' }}</span>
+              <div class="flex-1 border-t" style="border-color: var(--border)"></div>
+              <span class="text-xs font-mono text-emerald-600">{{ formatCost(group.totalCost) }}</span>
+            </div>
+            <div class="space-y-4">
+              <template v-for="session in group.sessions" :key="session.sessionId">
+                <AgentCard :agent="session" />
+                <SubAgentSection
+                  v-if="session.subAgents.length > 0"
+                  :session="session"
+                  :expanded="expandedSubAgents.has(session.sessionId)"
+                  :sorted-sub-agents="sortedSubAgents(session)"
+                  :summary="subAgentSummary(session)"
+                  @toggle="toggleSubAgents(session.sessionId)"
+                />
+              </template>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </Transition>
   </div>
 </template>
+
+<style>
+/* Simultaneous 3-D flip: leave folds back (absolute so it doesn't affect layout),
+   enter unfolds into place at the same time */
+.view-flip-leave-active {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  transition: transform 0.26s cubic-bezier(0.4, 0, 1, 1), opacity 0.2s ease-in;
+  transform-origin: center top;
+}
+.view-flip-leave-to {
+  transform: rotateX(90deg) scale(0.95);
+  opacity: 0;
+}
+
+.view-flip-enter-active {
+  transition: transform 0.34s cubic-bezier(0, 0, 0.2, 1), opacity 0.25s ease-out;
+  transform-origin: center top;
+}
+.view-flip-enter-from {
+  transform: rotateX(-70deg) scale(0.95);
+  opacity: 0;
+}
+.view-flip-enter-to {
+  transform: rotateX(0deg) scale(1);
+  opacity: 1;
+}
+</style>
