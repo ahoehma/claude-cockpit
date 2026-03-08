@@ -1,5 +1,19 @@
 # Changelog
 
+# [0.6.0](https://github.com/ahoehma/claude-cockpit/compare/v0.4.0...v0.6.0) (2026-03-08)
+
+
+### Features
+
+* task tracking, sub-agent expand levels, UX fixes ([83cc55e](https://github.com/ahoehma/claude-cockpit/commit/83cc55e5f1f96daddf113c13535884794a740b23))
+
+# [0.5.0](https://github.com/ahoehma/claude-cockpit/compare/v0.4.0...v0.5.0) (2026-03-08)
+
+
+### Features
+
+* task tracking, sub-agent expand levels, UX fixes ([83cc55e](https://github.com/ahoehma/claude-cockpit/commit/83cc55e5f1f96daddf113c13535884794a740b23))
+
 # [0.4.0](https://github.com/ahoehma/claude-cockpit/compare/v0.3.0...v0.4.0) (2026-03-08)
 
 
