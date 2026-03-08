@@ -1,0 +1,40 @@
+{
+  "name": "claude-cockpit",
+  "version": "0.1.0",
+  "description": "Local real-time dashboard for monitoring Claude Code agent sessions",
+  "author": "ahoehma",
+  "license": "MIT",
+  "homepage": "https://github.com/ahoehma/claude-cockpit",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahoehma/claude-cockpit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ahoehma/claude-cockpit/issues"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n server,client -c cyan,magenta --kill-others-on-fail \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "tsx src/server/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-vue": "^6.0.4",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vue": "^3.5.29"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.2.1",
+    "chokidar": "^5.0.0",
+    "lucide-vue-next": "^0.577.0",
+    "tailwindcss": "^4.2.1",
+    "ws": "^8.19.0"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.cockpit-port
+*.local
+.DS_Store
+Thumbs.db
+.claude/
+check-state.py
+verify-active.py

@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/* ── Light theme (default) ── */
+:root {
+  --bg:             #f1f5f9;
+  --surface:        #ffffff;
+  --surface-sub:    #f8fafc;
+  --surface-inset:  #f1f5f9;
+  --border:         #e2e8f0;
+  --border-subtle:  #f1f5f9;
+  --border-inset:   #e2e8f0;
+  --text:           #0f172a;
+  --text-muted:     #64748b;
+  --text-subtle:    #94a3b8;
+  --header-bg:      #ffffff;
+  --header-border:  #e2e8f0;
+}
+
+/* ── Dark theme ── */
+.dark {
+  --bg:             #0a0a0f;
+  --surface:        #12121a;
+  --surface-sub:    #0e0e18;
+  --surface-inset:  #0a0a14;
+  --border:         #2a2a3a;
+  --border-subtle:  #1a1a28;
+  --border-inset:   #1e1e30;
+  --text:           #e2e8f0;
+  --text-muted:     #94a3b8;
+  --text-subtle:    #64748b;
+  --header-bg:      #0d0d15;
+  --header-border:  #1e1e2e;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  min-height: 100vh;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Status pulse animation */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.status-pulse {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
+
+/* Status pulse animation */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.status-pulse {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #12121a; }
+::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a4a; }
