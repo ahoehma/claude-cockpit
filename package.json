@@ -1,6 +1,6 @@
 {
   "name": "@ahoehma/claude-cockpit",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Local real-time dashboard for monitoring Claude Code agent sessions",
   "author": "ahoehma",
   "license": "MIT",

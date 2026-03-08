@@ -1,5 +1,12 @@
 # Changelog
 
+# [0.4.0](https://github.com/ahoehma/claude-cockpit/compare/v0.3.0...v0.4.0) (2026-03-08)
+
+
+### Features
+
+* browser notifications, changelog automation, UX fixes ([2463e00](https://github.com/ahoehma/claude-cockpit/commit/2463e002d7f4dd7abdd1f1ca11604b39094df8a7))
+
 ## [0.3.0] - 2026-03-08
 
 ### Features
