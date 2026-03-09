@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Bot, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import AgentCard from './AgentCard.vue'
 import type { Session, SubAgent } from '../../../../server/models.ts'
@@ -11,6 +12,14 @@ defineProps<{
 }>()
 
 defineEmits<{ cycle: [] }>()
+
+const expanded = ref(new Set<string>())
+
+function toggleAgent(agentId: string) {
+  const s = new Set(expanded.value)
+  s.has(agentId) ? s.delete(agentId) : s.add(agentId)
+  expanded.value = s
+}
 
 function statusDotClass(a: SubAgent): string {
   if (a.status === 'active')   return 'bg-emerald-500 status-pulse'
@@ -79,43 +88,57 @@ function levelLabel(level: 0 | 1 | 2): string {
       />
     </button>
 
-    <!-- Level 1: compact rows -->
+    <!-- Level 1: compact rows (individually expandable) -->
     <div v-if="expandLevel === 1" class="mt-1.5 space-y-1">
-      <div
-        v-for="a in sortedSubAgents"
-        :key="a.agentId"
-        class="flex items-center gap-2 px-2 py-1.5 rounded-lg"
-        style="background: var(--surface-sub); border: 1px solid var(--border-subtle)"
-      >
-        <!-- Status dot -->
-        <span :class="['w-1.5 h-1.5 rounded-full flex-shrink-0', statusDotClass(a)]" />
-
-        <!-- Name -->
-        <span class="text-xs font-medium truncate min-w-0 flex-1" style="color: var(--text-muted)">
-          {{ a.slug || shortPath(a.cwd) }}
-        </span>
-        <span v-if="a.gitBranch" class="text-xs flex-shrink-0 truncate max-w-24" style="color: var(--text-subtle)">
-          {{ a.gitBranch }}
-        </span>
-
-        <!-- Task progress bar -->
-        <div v-if="a.tasks?.length" class="flex items-center gap-1 flex-shrink-0">
-          <div class="w-16 h-1 rounded-full overflow-hidden" style="background: var(--border)">
-            <div
-              class="h-full rounded-full"
-              style="background: #6366f1; transition: width 0.5s"
-              :style="{ width: taskProgress(a) + '%' }"
-            />
-          </div>
-          <span class="text-xs font-mono" style="color: var(--text-subtle)">{{ taskDone(a) }}/{{ a.tasks.length }}</span>
+      <template v-for="a in sortedSubAgents" :key="a.agentId">
+        <!-- Expanded: full AgentCard -->
+        <div v-if="expanded.has(a.agentId)">
+          <AgentCard :agent="a" :is-sub-agent="true" />
+          <button
+            class="mt-1 w-full text-xs px-2 py-0.5 rounded text-left transition-colors"
+            style="color: var(--text-subtle); background: var(--surface-inset)"
+            @click="toggleAgent(a.agentId)"
+          >‹‹ collapse</button>
         </div>
 
-        <!-- Cost -->
-        <span class="text-xs font-mono flex-shrink-0 text-emerald-600">{{ formatCost(a.tokenUsage.estimatedCostUsd) }}</span>
+        <!-- Compact row -->
+        <div
+          v-else
+          class="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors"
+          style="background: var(--surface-sub); border: 1px solid var(--border-subtle)"
+          @click="toggleAgent(a.agentId)"
+          title="Click to expand"
+        >
+          <!-- Status dot -->
+          <span :class="['w-1.5 h-1.5 rounded-full flex-shrink-0', statusDotClass(a)]" />
 
-        <!-- Status label -->
-        <span class="text-xs font-semibold flex-shrink-0 w-10 text-right" :style="statusColor(a)">{{ statusLabel(a) }}</span>
-      </div>
+          <!-- Name -->
+          <span class="text-xs font-medium truncate min-w-0 flex-1" style="color: var(--text-muted)">
+            {{ a.slug || shortPath(a.cwd) }}
+          </span>
+          <span v-if="a.gitBranch" class="text-xs flex-shrink-0 truncate max-w-24" style="color: var(--text-subtle)">
+            {{ a.gitBranch }}
+          </span>
+
+          <!-- Task progress bar -->
+          <div v-if="a.tasks?.length" class="flex items-center gap-1 flex-shrink-0">
+            <div class="w-16 h-1 rounded-full overflow-hidden" style="background: var(--border)">
+              <div
+                class="h-full rounded-full"
+                style="background: #6366f1; transition: width 0.5s"
+                :style="{ width: taskProgress(a) + '%' }"
+              />
+            </div>
+            <span class="text-xs font-mono" style="color: var(--text-subtle)">{{ taskDone(a) }}/{{ a.tasks.length }}</span>
+          </div>
+
+          <!-- Cost -->
+          <span class="text-xs font-mono flex-shrink-0 text-emerald-600">{{ formatCost(a.tokenUsage.estimatedCostUsd) }}</span>
+
+          <!-- Status label -->
+          <span class="text-xs font-semibold flex-shrink-0 w-10 text-right" :style="statusColor(a)">{{ statusLabel(a) }}</span>
+        </div>
+      </template>
     </div>
 
     <!-- Level 2: full AgentCards -->
