@@ -70,16 +70,8 @@ jobs:
       - name: Extract changelog for this release
         id: changelog
         run: |
-          python3 -c "
-import re, sys
-content = open('CHANGELOG.md').read()
-match = re.search(r'(#{1,2} \[.+?)(?=\n#{1,2} \[|\Z)', content, re.DOTALL)
-if match:
-    sys.stdout.write(match.group(1).strip())
-" > /tmp/notes.md
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          cat /tmp/notes.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          awk '/^#{1,2} \[/{if(n++) exit} n' CHANGELOG.md > /tmp/notes.md
+          { echo 'notes<<EOF'; cat /tmp/notes.md; echo 'EOF'; } >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
