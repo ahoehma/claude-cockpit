@@ -1,5 +1,17 @@
 # Changelog
 
+# [0.9.0](https://github.com/ahoehma/claude-cockpit/compare/v0.8.1...v0.9.0) (2026-03-09)
+
+
+### Bug Fixes
+
+* show sessions with active sub-agents in active filter ([6a26af4](https://github.com/ahoehma/claude-cockpit/commit/6a26af4d454e78069c527ba2cceb3012008a2979))
+
+
+### Features
+
+* individually expand/collapse sub-agents in compact list view ([80d0889](https://github.com/ahoehma/claude-cockpit/commit/80d088932e81b5b5703e282ae3b0d1f1239250ba))
+
 ## [0.8.1](https://github.com/ahoehma/claude-cockpit/compare/v0.8.0...v0.8.1) (2026-03-08)
 
 
