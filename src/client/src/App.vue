@@ -34,7 +34,10 @@ const allSessions = computed(() => state.value?.sessions ?? [])
 const { permission: notifPermission, muted: notifMuted, toggleMute: toggleNotif } = useNotifications(allSessions)
 
 function isActive(s: Session) {
-  return s.status === 'active' || (s.needsUserReaction && isRecent(s)) || isOutputReady(s)
+  return s.status === 'active'
+    || (s.needsUserReaction && isRecent(s))
+    || isOutputReady(s)
+    || s.subAgents.some(a => a.status === 'active' || (a.needsUserReaction && isRecent(s)))
 }
 
 function isRecent(s: Session) {
@@ -498,10 +501,10 @@ function formatCost(usd: number): string {
                 <SubAgentSection
                   v-if="session.subAgents.length > 0"
                   :session="session"
-                  :expanded="expandedSubAgents.has(session.sessionId)"
+                  :expand-level="subAgentLevel.get(session.sessionId) ?? 0"
                   :sorted-sub-agents="sortedSubAgents(session)"
                   :summary="subAgentSummary(session)"
-                  @toggle="toggleSubAgents(session.sessionId)"
+                  @cycle="cycleSubAgents(session.sessionId)"
                 />
               </template>
             </div>
