@@ -1,6 +1,7 @@
 # Claude Cockpit
 
 [![CI](https://github.com/ahoehma/claude-cockpit/actions/workflows/ci.yml/badge.svg)](https://github.com/ahoehma/claude-cockpit/actions/workflows/ci.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/ahoehma/claude-cockpit)](https://github.com/ahoehma/claude-cockpit/releases/latest)
 
 A local real-time dashboard for monitoring all your [Claude Code](https://claude.ai/code) agent sessions — including sub-agents — from a single browser tab.
 
