@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/ahoehma/claude-cockpit/compare/v1.0.0...v1.0.1) (2026-03-09)
+
+
+### Bug Fixes
+
+* skip stale-session notifications on page load / WS reconnect ([1c50dfa](https://github.com/ahoehma/claude-cockpit/commit/1c50dfadf2eb48c9fa67a284a89fbd83649d141c))
+
 # [0.9.0](https://github.com/ahoehma/claude-cockpit/compare/v0.8.1...v0.9.0) (2026-03-09)
 
 
