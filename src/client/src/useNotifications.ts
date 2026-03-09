@@ -5,6 +5,7 @@ import type { Session } from '../../../server/models.ts'
 // sessionId → timestamp of last notification (module-level, survives re-renders)
 const lastNotified = new Map<string, number>()
 const COOLDOWN_MS = 5 * 60_000  // re-notify same session at most every 5 min
+const STARTUP_TIME = Date.now()  // ignore sessions that were already stale when page loaded
 
 // sessionId → last alerted context threshold (75 or 90), to avoid repeat alerts
 const lastContextAlert = new Map<string, number>()
@@ -59,12 +60,15 @@ export function useNotifications(allSessions: Ref<Session[]>) {
     const now = Date.now()
 
     for (const s of sessions) {
-      // User response needed
+      // User response needed — skip if session was already stale when page loaded
       if (s.needsUserReaction) {
-        const last = lastNotified.get(s.sessionId) ?? 0
-        if (now - last > COOLDOWN_MS) {
-          lastNotified.set(s.sessionId, now)
-          fire(s)
+        const activityMs = new Date(s.lastActivity).getTime()
+        if (activityMs > STARTUP_TIME) {
+          const last = lastNotified.get(s.sessionId) ?? 0
+          if (now - last > COOLDOWN_MS) {
+            lastNotified.set(s.sessionId, now)
+            fire(s)
+          }
         }
       }
 
